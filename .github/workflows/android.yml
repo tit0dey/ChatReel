@@ -1,0 +1,107 @@
+name: Build signed Android APK
+
+on:
+  push:
+    paths:
+      - 'android/**'
+      - 'src/**'
+      - 'public/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - 'tsconfig.json'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build web assets
+        run: |
+          npm ci
+          npm run build
+          node scripts/sync-android-assets.mjs
+
+      - name: Prepare release signing identity
+        working-directory: android
+        env:
+          CHATREEL_KEYSTORE_BASE64: ${{ secrets.CHATREEL_KEYSTORE_BASE64 }}
+          STORED_KEYSTORE_PASSWORD: ${{ secrets.CHATREEL_KEYSTORE_PASSWORD }}
+          STORED_KEY_ALIAS: ${{ secrets.CHATREEL_KEY_ALIAS }}
+          STORED_KEY_PASSWORD: ${{ secrets.CHATREEL_KEY_PASSWORD }}
+        run: |
+          if [ -n "$CHATREEL_KEYSTORE_BASE64" ]; then
+            printf '%s' "$CHATREEL_KEYSTORE_BASE64" | base64 --decode > chatreel-upload.p12
+            echo "CHATREEL_KEYSTORE_PASSWORD=$STORED_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "CHATREEL_KEY_ALIAS=${STORED_KEY_ALIAS:-chatreel}" >> "$GITHUB_ENV"
+            echo "CHATREEL_KEY_PASSWORD=$STORED_KEY_PASSWORD" >> "$GITHUB_ENV"
+          else
+            PASSWORD=$(openssl rand -hex 24)
+            echo "::add-mask::$PASSWORD"
+            keytool -genkeypair -storetype PKCS12 -keystore chatreel-upload.p12 \
+              -alias chatreel -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$PASSWORD" -keypass "$PASSWORD" \
+              -dname "CN=ChatReel Studio, OU=On-device Video, O=ChatReel, C=IN"
+            echo "CHATREEL_KEYSTORE_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
+            echo "CHATREEL_KEY_ALIAS=chatreel" >> "$GITHUB_ENV"
+            echo "CHATREEL_KEY_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
+            echo "No stored signing secret was found; this artifact uses a one-time release identity."
+          fi
+
+      - name: Assemble and sign release APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease --no-daemon
+
+      - name: Verify zip alignment and V2/V3 signatures
+        working-directory: android
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          if [ ! -x "$BUILD_TOOLS/apksigner" ]; then
+            BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          fi
+          "$BUILD_TOOLS/zipalign" -c -P 4 4 "$APK"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
+          "$BUILD_TOOLS/apksigner" verify --verbose "$APK" | grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true'
+          "$BUILD_TOOLS/apksigner" verify --verbose "$APK" | grep -q 'Verified using v3 scheme (APK Signature Scheme v3): true'
+
+      - name: Package signed artifact
+        run: |
+          mkdir -p apk
+          cp android/app/build/outputs/apk/release/app-release.apk apk/ChatReel-Studio.apk
+
+      - name: Upload signed APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChatReel-Studio-signed-apk
+          path: apk/ChatReel-Studio.apk
+          if-no-files-found: error
+          retention-days: 90
