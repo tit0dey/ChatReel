@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   assemble:
@@ -112,3 +112,15 @@ jobs:
           path: apk/ChatReel-Studio.apk
           if-no-files-found: error
           retention-days: 90
+
+      - name: Store verified APK in the repository
+        run: |
+          git config user.name "chatreel-release"
+          git config user.email "chatreel-release@users.noreply.github.com"
+          git add apk/ChatReel-Studio.apk
+          if git diff --cached --quiet; then
+            echo "The verified APK is already up to date."
+            exit 0
+          fi
+          git commit -m "Add verified signed ChatReel Studio APK [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
