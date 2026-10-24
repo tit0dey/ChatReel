@@ -1,0 +1,58 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.chatreel.studio'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.chatreel.studio'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '1.0.0'
+    }
+
+    signingConfigs {
+        release {
+            def keystore = rootProject.file('chatreel-upload.p12')
+            if (keystore.exists()) {
+                storeFile keystore
+                storeType 'PKCS12'
+                storePassword System.getenv('CHATREEL_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('CHATREEL_KEY_ALIAS') ?: 'chatreel'
+                keyPassword System.getenv('CHATREEL_KEY_PASSWORD')
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = false
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (rootProject.file('chatreel-upload.p12').exists()) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core:1.15.0'
+    implementation 'androidx.webkit:webkit:1.12.1'
+}
