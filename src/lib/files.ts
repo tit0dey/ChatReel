@@ -1,5 +1,3 @@
-import { loadImage } from './assets';
-
 export function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -13,7 +11,13 @@ export async function prepareImage(file: File, maximumDimension = 1440): Promise
   if (!file.type.startsWith('image/')) throw new Error('Choose a valid image file.');
   if (file.size > 25 * 1024 * 1024) throw new Error('Choose an image smaller than 25 MB.');
   const source = await readFileAsDataUrl(file);
-  const image = await loadImage(source);
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const element = new Image();
+    element.decoding = 'async';
+    element.onload = () => resolve(element);
+    element.onerror = () => reject(new Error('The selected image could not be decoded.'));
+    element.src = source;
+  });
   const scale = Math.min(1, maximumDimension / Math.max(image.naturalWidth, image.naturalHeight));
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
@@ -22,7 +26,11 @@ export async function prepareImage(file: File, maximumDimension = 1440): Promise
   if (!context) return source;
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
   const keepPng = file.type === 'image/png' && maximumDimension <= 512;
-  return canvas.toDataURL(keepPng ? 'image/png' : 'image/jpeg', 0.9);
+  const prepared = canvas.toDataURL(keepPng ? 'image/png' : 'image/jpeg', 0.9);
+  image.src = '';
+  canvas.width = 1;
+  canvas.height = 1;
+  return prepared;
 }
 
 export function prepareBackground(file: File): { src: string; type: 'image' | 'video' } {

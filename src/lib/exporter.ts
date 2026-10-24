@@ -137,9 +137,10 @@ async function exportWithWebCodecs(request: ExportRequest): Promise<Blob> {
   if (!videoChoice) throw new Error('Hardware video encoding is unavailable.');
 
   onProgress({ phase: 'audio', progress: 0, detail: 'Rendering the synchronized audio mix' });
-  const audioBuffer = await renderStoryAudio(story, timeline);
+  let audioBuffer = await renderStoryAudio(story, timeline);
   throwIfAborted(signal);
   const audioTrack = await encodeAudioTrack(audioBuffer, onProgress);
+  audioBuffer = null;
   throwIfAborted(signal);
 
   const canvas = document.createElement('canvas');
@@ -160,6 +161,7 @@ async function exportWithWebCodecs(request: ExportRequest): Promise<Blob> {
     firstTimestampBehavior: 'offset',
   });
   audioTrack?.chunks.forEach(({ chunk, meta }) => muxer.addAudioChunk(chunk, meta));
+  if (audioTrack) audioTrack.chunks.length = 0;
 
   let encoderError: Error | null = null;
   const encoder = new VideoEncoder({

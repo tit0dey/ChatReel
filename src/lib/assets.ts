@@ -14,6 +14,10 @@ export function loadImage(src: string): Promise<HTMLImageElement> {
     image.src = src;
   });
   imageCache.set(src, promise);
+  if (imageCache.size > 24) {
+    const oldest = imageCache.keys().next().value;
+    if (oldest && oldest !== src) imageCache.delete(oldest);
+  }
   promise.catch(() => imageCache.delete(src));
   return promise;
 }
@@ -33,6 +37,10 @@ function loadVideo(src: string): Promise<HTMLVideoElement> {
     video.load();
   });
   videoCache.set(src, promise);
+  if (videoCache.size > 2) {
+    const oldest = videoCache.keys().next().value;
+    if (oldest && oldest !== src) videoCache.delete(oldest);
+  }
   promise.catch(() => videoCache.delete(src));
   return promise;
 }
