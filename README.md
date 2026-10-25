@@ -23,6 +23,10 @@ Free Starter includes 720p30 exports, iMessage and WhatsApp exports, built-in mo
 
 The one-time checkout opens on Whop in a new browser tab on the web and through `Intent.ACTION_VIEW` on Android. License activation is local: `src/engine/licenseVerifier.ts` contains only an ECDSA P-256 public key and verifies `CRPRO-...` signatures with WebCrypto or a self-contained BigInt/SHA-256 fallback. Verified status and the original license are persisted locally and reverified on launch. Private signing keys and buyer key lists must remain outside the repository.
 
+For zero-touch post-purchase activation, set the Whop Checkout Link Redirect URL to `https://tit0dey.github.io/ChatReel/?unlock=CRPRO-...` with a valid lifetime key substituted. The web studio also accepts `?key=CRPRO-...`, `#unlock=CRPRO-...`, and `#key=CRPRO-...`. It verifies the key automatically, persists Lifetime Pro, and immediately removes the credentials from the address bar with `history.replaceState`. The confirmation screen retains manual entry only as an optional backup.
+
+On an Android browser, the confirmation automatically attempts `chatreel://unlock?key=CRPRO-...` and provides a one-tap return button. The APK's `singleTask` activity handles this deep link on both cold start and `onNewIntent`, passes the key into the WebView, and runs the same local verification and persistence flow.
+
 ## Web development
 
 Requirements: Node.js 22 or newer.

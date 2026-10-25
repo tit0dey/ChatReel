@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BadgeCheck, Clapperboard, Crown, Download, HardDrive, MessageSquareText, Moon, SlidersHorizontal, Sun } from 'lucide-react';
 import { ExportPanel } from './components/ExportPanel';
+import { PaymentConfirmationModal } from './components/PaymentConfirmationModal';
 import { PlanModal } from './components/PlanModal';
 import { Stage } from './components/Stage';
 import { StoryPanel } from './components/StoryPanel';
@@ -29,7 +30,13 @@ function mediaSignature(story: Story): string {
   return `${hash}-${value.length}`;
 }
 
-export default function App() {
+interface AppProps {
+  automaticUnlockKeys?: readonly string[];
+}
+
+const NO_AUTOMATIC_UNLOCK_KEYS: readonly string[] = [];
+
+export default function App({ automaticUnlockKeys = NO_AUTOMATIC_UNLOCK_KEYS }: AppProps) {
   const { toast } = useToast();
   const { isPro, status: licenseStatus, activate } = useProLicense();
   const [story, setStory] = usePersistentStory();
@@ -37,6 +44,9 @@ export default function App() {
   const [planOpen, setPlanOpen] = useState(false);
   const [planReason, setPlanReason] = useState<string | null>(null);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+  const [autoUnlockPending, setAutoUnlockPending] = useState(automaticUnlockKeys.length > 0);
+  const [paymentConfirmationKey, setPaymentConfirmationKey] = useState<string | null>(null);
+  const startupUnlockAttempted = useRef(false);
   const [appearance, setAppearance] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('chatreel-appearance');
     return saved === 'dark' || saved === 'light' ? saved : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -48,6 +58,39 @@ export default function App() {
   const timeline = useMemo(() => buildTimeline(story), [story]);
   const signature = mediaSignature(story);
 
+  const activateAutomatically = useCallback(async (licenseKey: string): Promise<boolean> => {
+    const normalized = licenseKey.trim();
+    setAutoUnlockPending(true);
+    const valid = await activate(normalized);
+    setAutoUnlockPending(false);
+    if (!valid) {
+      toast('Automatic unlock failed', { detail: 'The URL license key is invalid. You can use the optional manual activation field instead.', tone: 'error' });
+      return false;
+    }
+    setPaymentConfirmationKey(normalized);
+    setPlanOpen(false);
+    setPlanReason(null);
+    setOnboardingDismissed(true);
+    return true;
+  }, [activate, toast]);
+
+  useEffect(() => {
+    window.ChatReelAutoUnlock = activateAutomatically;
+    return () => {
+      if (window.ChatReelAutoUnlock === activateAutomatically) delete window.ChatReelAutoUnlock;
+    };
+  }, [activateAutomatically]);
+
+  useEffect(() => {
+    if (startupUnlockAttempted.current || automaticUnlockKeys.length === 0) return;
+    startupUnlockAttempted.current = true;
+    void (async () => {
+      for (const key of automaticUnlockKeys) {
+        if (await activateAutomatically(key)) break;
+      }
+    })();
+  }, [activateAutomatically, automaticUnlockKeys]);
+
   useEffect(() => {
     document.documentElement.dataset.theme = appearance;
     localStorage.setItem('chatreel-appearance', appearance);
@@ -55,11 +98,11 @@ export default function App() {
   }, [appearance]);
 
   useEffect(() => {
-    if (licenseStatus === 'free' && !onboardingDismissed) {
+    if (licenseStatus === 'free' && !onboardingDismissed && !autoUnlockPending && !paymentConfirmationKey) {
       setPlanReason(null);
       setPlanOpen(true);
     }
-  }, [licenseStatus, onboardingDismissed]);
+  }, [licenseStatus, onboardingDismissed, autoUnlockPending, paymentConfirmationKey]);
 
   useEffect(() => {
     if (isPro) {
@@ -163,7 +206,14 @@ export default function App() {
         </nav>
       )}
 
-      {planOpen && !isPro && <PlanModal onClose={closePlan} onActivate={activate} reason={planReason} />}
+      {paymentConfirmationKey && (
+        <PaymentConfirmationModal
+          verifiedKey={paymentConfirmationKey}
+          onActivate={activate}
+          onClose={() => setPaymentConfirmationKey(null)}
+        />
+      )}
+      {planOpen && !isPro && !paymentConfirmationKey && <PlanModal onClose={closePlan} onActivate={activate} reason={planReason} />}
     </div>
   );
 }

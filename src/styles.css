@@ -653,6 +653,52 @@ input[type="range"] { accent-color: var(--accent); cursor: pointer; }
 .activation-error svg { flex: 0 0 auto; margin-top: 1px; }
 .checkout-note { display: flex; align-items: center; justify-content: center; gap: 5px; color: var(--faint); font-size: 8.5px; line-height: 1.45; text-align: center; }
 .checkout-note svg { flex: 0 0 auto; }
+.payment-confirmation-body { display: grid; gap: 14px; text-align: center; }
+.payment-success-icon {
+  width: 66px;
+  height: 66px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  border-radius: 21px;
+  background: linear-gradient(145deg, var(--accent-soft), var(--indigo-soft));
+  color: var(--accent-strong);
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--accent) 13%, transparent);
+}
+.payment-verification {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border-radius: 13px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  text-align: left;
+}
+.payment-verification > svg { flex: 0 0 auto; margin-top: 1px; }
+.payment-verification strong { display: block; font-size: 12px; }
+.payment-verification span { display: block; margin-top: 3px; color: var(--text-soft); font-size: 10px; line-height: 1.5; }
+.android-return-panel {
+  display: grid;
+  gap: 8px;
+  padding: 13px;
+  border: 1px solid color-mix(in srgb, var(--indigo) 20%, var(--border));
+  border-radius: 13px;
+  background: var(--indigo-soft);
+}
+.android-return-button {
+  min-height: 48px;
+  padding: 10px 14px;
+  color: #FFFFFF;
+  background: linear-gradient(120deg, var(--accent-strong), var(--indigo));
+  font-size: 11px;
+  line-height: 1.4;
+}
+.android-return-panel p { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+.payment-continue { min-height: 44px; background: var(--text); color: var(--card); font-size: 11px; }
+.payment-backup { text-align: left; }
 
 @media (max-width: 900px) {
   .unlock-pro-button, .pro-active-badge { min-height: 36px; }
@@ -675,4 +721,8 @@ input[type="range"] { accent-color: var(--accent); cursor: pointer; }
   .license-input-row { flex-direction: column; }
   .activate-button { width: 100%; }
   .checkout-note { align-items: flex-start; font-size: 8px; }
+  .payment-success-icon { width: 58px; height: 58px; border-radius: 18px; }
+  .payment-verification { padding: 11px; }
+  .android-return-panel { padding: 11px; }
+  .android-return-button { min-height: 50px; font-size: 10px; }
 }

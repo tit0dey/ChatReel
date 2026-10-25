@@ -122,5 +122,6 @@ export interface NativeDownloadBridge {
 declare global {
   interface Window {
     ChatReelAndroid?: NativeDownloadBridge;
+    ChatReelAutoUnlock?: (licenseKey: string) => Promise<boolean>;
   }
 }
