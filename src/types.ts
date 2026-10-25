@@ -91,6 +91,7 @@ export interface RenderOptions {
   story: Story;
   timeline: StoryTimeline;
   assets: AssetBundle;
+  isPro: boolean;
   partLabel?: string;
 }
 
@@ -115,6 +116,7 @@ export interface NativeDownloadBridge {
   writeVideoChunk: (base64Chunk: string) => boolean;
   finishDownload: () => boolean;
   cancelDownload: () => void;
+  openExternal?: (url: string) => boolean;
 }
 
 declare global {

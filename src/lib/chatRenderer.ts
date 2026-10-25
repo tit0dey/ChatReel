@@ -553,7 +553,37 @@ function drawInputBar(ctx: CanvasRenderingContext2D, story: Story, frame: ChatFr
   ctx.stroke();
 }
 
-export function drawChat(ctx: CanvasRenderingContext2D, story: Story, timeline: StoryTimeline, time: number, w: number, h: number, assets: AssetBundle) {
+function drawFreePreviewWatermark(ctx: CanvasRenderingContext2D, time: number, frame: ChatFrame) {
+  const { unit } = frame;
+  const text = 'ChatReel Studio • Free Preview — Unlock Pro ($9)';
+  setFont(ctx, 20 * unit, 650);
+  const bannerWidth = Math.min(frame.width - 36 * unit, ctx.measureText(text).width + 48 * unit);
+  const bannerHeight = 43 * unit;
+  const horizontalTravel = Math.max(0, frame.width - bannerWidth - 40 * unit);
+  const x = frame.x + 20 * unit + (Math.sin(time * 0.42) + 1) * 0.5 * horizontalTravel;
+  const bodyHeight = frame.bodyBottom - frame.bodyY;
+  const verticalTravel = Math.max(0, bodyHeight * 0.25);
+  const centerY = frame.bodyY + bodyHeight * 0.5;
+  const y = clamp(centerY + Math.sin(time * 0.63 + 1.1) * verticalTravel - bannerHeight / 2, frame.bodyY + 20 * unit, frame.bodyBottom - bannerHeight - 20 * unit);
+
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.28)';
+  ctx.shadowBlur = 16 * unit;
+  ctx.shadowOffsetY = 5 * unit;
+  fillRoundRect(ctx, x, y, bannerWidth, bannerHeight, bannerHeight / 2, 'rgba(10,15,26,0.76)');
+  ctx.shadowColor = 'transparent';
+  roundedRect(ctx, x, y, bannerWidth, bannerHeight, bannerHeight / 2);
+  ctx.strokeStyle = 'rgba(45,212,191,0.52)';
+  ctx.lineWidth = 1.2 * unit;
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(248,250,252,0.96)';
+  ctx.textAlign = 'center';
+  ctx.fillText(text, x + bannerWidth / 2, y + 28 * unit, bannerWidth - 28 * unit);
+  ctx.textAlign = 'left';
+  ctx.restore();
+}
+
+export function drawChat(ctx: CanvasRenderingContext2D, story: Story, timeline: StoryTimeline, time: number, w: number, h: number, assets: AssetBundle, isPro: boolean) {
   const settings = story.settings;
   const unit = Math.min(w, h) / 1080;
   const full = settings.viewport === 'fullscreen';
@@ -645,9 +675,10 @@ export function drawChat(ctx: CanvasRenderingContext2D, story: Story, timeline: 
   drawHeader(ctx, story, frame, assets, isTyping && active?.message.side === 'receiver');
   drawStatusBar(ctx, story, frame);
   drawInputBar(ctx, story, frame);
+  if (!isPro) drawFreePreviewWatermark(ctx, time, frame);
   ctx.restore();
 
-  if (settings.watermark && settings.watermarkText.trim()) {
+  if (isPro && settings.watermark && settings.watermarkText.trim()) {
     setFont(ctx, 20 * unit, 600);
     const text = settings.watermarkText.trim();
     const width = ctx.measureText(text).width + 36 * unit;

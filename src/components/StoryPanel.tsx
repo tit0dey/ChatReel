@@ -15,12 +15,14 @@ import { useToast } from './Toasts';
 interface StoryPanelProps {
   story: Story;
   onChange: (story: Story) => void;
+  isPro: boolean;
+  onRequestPro: (reason: string) => void;
 }
 
 const avatarColors = ['#0D9488', '#4F46E5', '#E11D48', '#D97706'];
 const templateIcons = [Moon, Shuffle, Users, FileWarning, Heart, Languages];
 
-function CharacterEditor({ story, side, onChange }: StoryPanelProps & { side: 'sender' | 'receiver' }) {
+function CharacterEditor({ story, side, onChange }: { story: Story; onChange: (story: Story) => void; side: 'sender' | 'receiver' }) {
   const { toast } = useToast();
   const sender = side === 'sender';
   const name = sender ? story.settings.senderName : story.settings.contactName;
@@ -64,7 +66,7 @@ function CharacterEditor({ story, side, onChange }: StoryPanelProps & { side: 's
   );
 }
 
-export function StoryPanel({ story, onChange }: StoryPanelProps) {
+export function StoryPanel({ story, onChange, isPro, onRequestPro }: StoryPanelProps) {
   const { toast } = useToast();
   const [quickOpen, setQuickOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
@@ -78,6 +80,10 @@ export function StoryPanel({ story, onChange }: StoryPanelProps) {
   });
   const removeMessage = (id: string) => onChange({ ...story, messages: story.messages.filter((item) => item.id !== id) });
   const duplicateMessage = (index: number) => {
+    if (!isPro && story.messages.length >= 10) {
+      onRequestPro('more than 10 messages in one video');
+      return;
+    }
     const messages = [...story.messages];
     messages.splice(index + 1, 0, { ...messages[index], id: uid() });
     onChange({ ...story, messages });
@@ -89,8 +95,18 @@ export function StoryPanel({ story, onChange }: StoryPanelProps) {
     [messages[index], messages[target]] = [messages[target], messages[index]];
     onChange({ ...story, messages });
   };
-  const append = (item: StoryMessage) => onChange({ ...story, messages: [...story.messages, item] });
+  const append = (item: StoryMessage) => {
+    if (!isPro && story.messages.length >= 10) {
+      onRequestPro('more than 10 messages in one video');
+      return;
+    }
+    onChange({ ...story, messages: [...story.messages, item] });
+  };
   const loadTemplate = (template: StoryTemplate) => {
+    if (!isPro && template.messages.length > 10) {
+      onRequestPro('templates longer than 10 messages');
+      return;
+    }
     onChange(instantiateTemplate(template));
     setTemplatesOpen(false);
     toast('Template loaded', { detail: `${template.name} is ready on the timeline.` });
@@ -121,7 +137,7 @@ export function StoryPanel({ story, onChange }: StoryPanelProps) {
       </section>
 
       <section className="panel-section message-section">
-        <SectionHeader title="Message timeline" description={`${story.messages.length} story beats`} />
+        <SectionHeader title="Message timeline" description={isPro ? `${story.messages.length} story beats` : `${story.messages.length} of 10 free story beats`} />
         <div className="message-list">
           {story.messages.map((item, index) => (
             <article className={`message-editor ${item.type === 'divider' ? 'divider-editor' : ''}`} key={item.id}>
@@ -225,6 +241,11 @@ export function StoryPanel({ story, onChange }: StoryPanelProps) {
             <button className="button primary" onClick={() => {
               if (!script.trim()) { toast('Paste a script first', { tone: 'error' }); return; }
               const parsed = parseQuickScript(script, story);
+              if (!isPro && parsed.messages.length > 10) {
+                setQuickOpen(false);
+                onRequestPro('scripts longer than 10 messages');
+                return;
+              }
               onChange(parsed);
               setQuickOpen(false);
               setScript('');

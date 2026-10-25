@@ -15,7 +15,13 @@ ChatReel Studio v1.0.0 is a local-first chat story video studio for Shorts, Reel
 - Local IndexedDB export Vault and local project persistence.
 - Secure Android WebView shell with native media pickers and chunked Downloads/ChatReelStudio saving.
 
-No API keys, remote media services, accounts, or server-side rendering are required.
+Core editing and rendering require no API keys, remote media services, accounts, or server-side rendering.
+
+## Free Starter and Lifetime Pro
+
+Free Starter includes 720p30 exports, iMessage and WhatsApp exports, built-in motion backgrounds, up to 10 story beats, and a moving center preview watermark. Pro themes remain available for live preview. Lifetime Pro unlocks 1080p60, every theme, unlimited story beats, multi-part series, custom backgrounds, and optional custom channel branding without the forced preview watermark.
+
+The one-time checkout opens on Whop in a new browser tab on the web and through `Intent.ACTION_VIEW` on Android. License activation is local: `src/engine/licenseVerifier.ts` contains only an ECDSA P-256 public key and verifies `CRPRO-...` signatures with WebCrypto or a self-contained BigInt/SHA-256 fallback. Verified status and the original license are persisted locally and reverified on launch. Private signing keys and buyer key lists must remain outside the repository.
 
 ## Web development
 

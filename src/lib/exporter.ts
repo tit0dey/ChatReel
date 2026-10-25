@@ -9,6 +9,7 @@ interface ExportRequest {
   story: Story;
   timeline: StoryTimeline;
   assets: AssetBundle;
+  isPro: boolean;
   partLabel?: string;
   onProgress: (progress: ExportProgress) => void;
   signal?: AbortSignal;
@@ -131,7 +132,7 @@ async function chooseVideoConfig(width: number, height: number, fps: number): Pr
 }
 
 async function exportWithWebCodecs(request: ExportRequest): Promise<Blob> {
-  const { story, timeline, assets, onProgress, signal, partLabel } = request;
+  const { story, timeline, assets, isPro, onProgress, signal, partLabel } = request;
   const { width, height } = getOutputDimensions(story.settings.aspect, story.settings.resolution);
   const videoChoice = await chooseVideoConfig(width, height, story.settings.fps);
   if (!videoChoice) throw new Error('Hardware video encoding is unavailable.');
@@ -175,7 +176,7 @@ async function exportWithWebCodecs(request: ExportRequest): Promise<Blob> {
       throwIfAborted(signal);
       const time = index / story.settings.fps;
       await seekBackgroundVideo(assets, time);
-      renderFrame(context, { width, height, time, story, timeline, assets, partLabel });
+      renderFrame(context, { width, height, time, story, timeline, assets, isPro, partLabel });
       const frame = new VideoFrame(canvas, {
         timestamp: Math.round(index * 1_000_000 / story.settings.fps),
         duration: Math.round(1_000_000 / story.settings.fps),
@@ -213,7 +214,7 @@ function recorderMimeType(): string {
 }
 
 async function exportWithMediaRecorder(request: ExportRequest): Promise<Blob> {
-  const { story, timeline, assets, onProgress, signal, partLabel } = request;
+  const { story, timeline, assets, isPro, onProgress, signal, partLabel } = request;
   if (typeof MediaRecorder === 'undefined') throw new Error('This browser does not provide a video recorder.');
   const { width, height } = getOutputDimensions(story.settings.aspect, story.settings.resolution);
   const canvas = document.createElement('canvas');
@@ -268,7 +269,7 @@ async function exportWithMediaRecorder(request: ExportRequest): Promise<Blob> {
     const draw = (now: number) => {
       if (!startedAt) startedAt = now;
       const time = Math.min(timeline.duration, (now - startedAt) / 1000);
-      renderFrame(context, { width, height, time, story, timeline, assets, partLabel });
+      renderFrame(context, { width, height, time, story, timeline, assets, isPro, partLabel });
       onProgress({ phase: 'video', progress: time / timeline.duration, detail: 'Recording with the compatibility encoder' });
       if (time >= timeline.duration) {
         onProgress({ phase: 'finalizing', progress: 1, detail: 'Finalizing the recording' });

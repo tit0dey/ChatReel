@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Clapperboard, Download, HardDrive, MessageSquareText, Moon, SlidersHorizontal, Sun } from 'lucide-react';
+import { BadgeCheck, Clapperboard, Crown, Download, HardDrive, MessageSquareText, Moon, SlidersHorizontal, Sun } from 'lucide-react';
 import { ExportPanel } from './components/ExportPanel';
+import { PlanModal } from './components/PlanModal';
 import { Stage } from './components/Stage';
 import { StoryPanel } from './components/StoryPanel';
 import { StylePanel } from './components/StylePanel';
 import { useToast } from './components/Toasts';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { usePersistentStory } from './hooks/usePersistentStory';
+import { useProLicense } from './hooks/useProLicense';
 import { loadAssets } from './lib/assets';
 import { buildTimeline } from './lib/story';
 import type { AssetBundle, Story } from './types';
@@ -29,8 +31,12 @@ function mediaSignature(story: Story): string {
 
 export default function App() {
   const { toast } = useToast();
+  const { isPro, status: licenseStatus, activate } = useProLicense();
   const [story, setStory] = usePersistentStory();
   const [activeTab, setActiveTab] = useState<StudioTab>('story');
+  const [planOpen, setPlanOpen] = useState(false);
+  const [planReason, setPlanReason] = useState<string | null>(null);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [appearance, setAppearance] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('chatreel-appearance');
     return saved === 'dark' || saved === 'light' ? saved : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -49,6 +55,20 @@ export default function App() {
   }, [appearance]);
 
   useEffect(() => {
+    if (licenseStatus === 'free' && !onboardingDismissed) {
+      setPlanReason(null);
+      setPlanOpen(true);
+    }
+  }, [licenseStatus, onboardingDismissed]);
+
+  useEffect(() => {
+    if (isPro) {
+      setPlanOpen(false);
+      setPlanReason(null);
+    }
+  }, [isPro]);
+
+  useEffect(() => {
     let active = true;
     setAssetsLoading(true);
     loadAssets(story).then((bundle) => {
@@ -64,6 +84,15 @@ export default function App() {
   }, [signature]);
 
   const onChange = (next: Story) => setStory({ ...next, updatedAt: Date.now() });
+  const requestPro = (reason: string | null = null) => {
+    setPlanReason(reason);
+    setPlanOpen(true);
+  };
+  const closePlan = () => {
+    setPlanOpen(false);
+    setPlanReason(null);
+    setOnboardingDismissed(true);
+  };
   const selectTab = (tab: StudioTab) => {
     if (exporting) {
       toast('Export in progress', { detail: 'Cancel or finish the current render before leaving this view.', tone: 'info' });
@@ -72,10 +101,10 @@ export default function App() {
     setActiveTab(tab);
   };
   const panel = activeTab === 'story'
-    ? <StoryPanel story={story} onChange={onChange} />
+    ? <StoryPanel story={story} onChange={onChange} isPro={isPro} onRequestPro={requestPro} />
     : activeTab === 'style'
-      ? <StylePanel story={story} onChange={onChange} />
-      : <ExportPanel story={story} timeline={timeline} assets={assets} onChange={onChange} onExportingChange={setExporting} />;
+      ? <StylePanel story={story} onChange={onChange} isPro={isPro} onRequestPro={requestPro} />
+      : <ExportPanel story={story} timeline={timeline} assets={assets} onChange={onChange} onExportingChange={setExporting} isPro={isPro} onRequestPro={requestPro} />;
   const apkHref = window.location.hostname.endsWith('github.io')
     ? 'https://github.com/tit0dey/ChatReel/raw/main/apk/ChatReel-Studio.apk'
     : './apk';
@@ -89,6 +118,11 @@ export default function App() {
         </button>
         <div className="topbar-actions">
           <span className="local-status"><HardDrive size={15} />Saved locally</span>
+          {isPro ? (
+            <span className="pro-active-badge"><BadgeCheck size={16} />Pro Lifetime Active</span>
+          ) : (
+            <button className="button unlock-pro-button" onClick={() => requestPro()}><Crown size={16} /><span>Unlock Pro — $9</span></button>
+          )}
           {!window.ChatReelAndroid && <a className="button android-link" href={apkHref} download><Download size={16} /><span>Android app</span></a>}
           <button className="theme-toggle" onClick={() => setAppearance((value) => value === 'light' ? 'dark' : 'light')} aria-label={`Switch to ${appearance === 'light' ? 'dark' : 'light'} mode`} title={`Switch to ${appearance === 'light' ? 'dark' : 'light'} mode`}>
             <span className={appearance === 'light' ? 'active' : ''}><Sun size={16} /></span>
@@ -106,14 +140,14 @@ export default function App() {
             <div className="panel-scroll">{panel}</div>
           </aside>
           <div className="stage-workspace">
-            <Stage story={story} timeline={timeline} assets={assets} assetsLoading={assetsLoading} suspended={exporting} />
+            <Stage story={story} timeline={timeline} assets={assets} assetsLoading={assetsLoading} suspended={exporting} isPro={isPro} />
           </div>
         </main>
       ) : (
         <main className={`mobile-studio mobile-${activeTab}`}>
           {activeTab === 'export' ? (
             <div className="mobile-export-layout">
-              <Stage story={story} timeline={timeline} assets={assets} assetsLoading={assetsLoading} suspended={exporting} />
+              <Stage story={story} timeline={timeline} assets={assets} assetsLoading={assetsLoading} suspended={exporting} isPro={isPro} />
               {panel}
             </div>
           ) : panel}
@@ -128,6 +162,8 @@ export default function App() {
           })}
         </nav>
       )}
+
+      {planOpen && !isPro && <PlanModal onClose={closePlan} onActivate={activate} reason={planReason} />}
     </div>
   );
 }

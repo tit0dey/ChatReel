@@ -18,7 +18,7 @@ export const DEFAULT_SETTINGS: StorySettings = {
   ambient: 'lofi',
   sound: true,
   voiceover: false,
-  resolution: '1080',
+  resolution: '720',
   fps: 30,
   exportMode: 'single',
   partDuration: 45,
