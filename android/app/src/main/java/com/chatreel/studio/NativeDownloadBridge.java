@@ -1,8 +1,10 @@
 package com.chatreel.studio;
 
+import android.app.Activity;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
@@ -20,13 +22,31 @@ import java.io.OutputStream;
  * whole movie in one Binder transaction, which keeps large exports reliable.
  */
 public final class NativeDownloadBridge {
+    private static final String CHECKOUT_URL = "https://whop.com/checkout/plan_zSJ2SM66mF5gY";
+    private final Activity activity;
     private final Context context;
     private OutputStream outputStream;
     private Uri pendingUri;
     private File legacyFile;
 
-    NativeDownloadBridge(Context context) {
-        this.context = context.getApplicationContext();
+    NativeDownloadBridge(Activity activity) {
+        this.activity = activity;
+        this.context = activity.getApplicationContext();
+    }
+
+    @JavascriptInterface
+    public boolean openExternal(String url) {
+        if (!CHECKOUT_URL.equals(url)) return false;
+        activity.runOnUiThread(() -> {
+            try {
+                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(CHECKOUT_URL));
+                intent.addCategory(Intent.CATEGORY_BROWSABLE);
+                activity.startActivity(intent);
+            } catch (Exception ignored) {
+                // The WebView remains open if no external browser is installed.
+            }
+        });
+        return true;
     }
 
     @JavascriptInterface

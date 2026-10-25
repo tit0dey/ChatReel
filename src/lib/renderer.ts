@@ -4,7 +4,7 @@ import { drawChat } from './chatRenderer';
 import type { RenderOptions } from '../types';
 
 export function renderFrame(ctx: CanvasRenderingContext2D, options: RenderOptions) {
-  const { width, height, time, story, timeline, assets, partLabel } = options;
+  const { width, height, time, story, timeline, assets, isPro, partLabel } = options;
   ctx.save();
   ctx.clearRect(0, 0, width, height);
   drawBackground(ctx, story, time, width, height, assets);
@@ -15,7 +15,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, options: RenderOption
     const unit = Math.min(width, height) / 1080;
     ctx.translate(Math.sin(time * 83) * strength * 5 * unit, Math.cos(time * 71) * strength * 3 * unit);
   }
-  drawChat(ctx, story, timeline, time, width, height, assets);
+  drawChat(ctx, story, timeline, time, width, height, assets, isPro);
   ctx.restore();
 
   if (activeSting) {

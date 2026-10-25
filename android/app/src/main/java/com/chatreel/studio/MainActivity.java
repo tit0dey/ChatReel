@@ -27,7 +27,10 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.webkit.WebViewAssetLoader;
 
+import org.json.JSONObject;
+
 public final class MainActivity extends Activity {
+    private static final String APP_URL = "https://appassets.androidplatform.net/assets/www/index.html";
     private static final int FILE_CHOOSER_REQUEST = 3107;
     private static final int STORAGE_PERMISSION_REQUEST = 3108;
     private WebView webView;
@@ -58,7 +61,18 @@ public final class MainActivity extends Activity {
             requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_PERMISSION_REQUEST);
         }
 
-        webView.loadUrl("https://appassets.androidplatform.net/assets/www/index.html");
+        String startUrl = APP_URL;
+        String unlockKey = unlockKeyFromIntent(getIntent());
+        if (unlockKey != null) startUrl += "?key=" + Uri.encode(unlockKey);
+        webView.loadUrl(startUrl);
+    }
+
+    private String unlockKeyFromIntent(Intent intent) {
+        if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())) return null;
+        Uri uri = intent.getData();
+        if (uri == null || !"chatreel".equals(uri.getScheme()) || !"unlock".equals(uri.getHost())) return null;
+        String key = uri.getQueryParameter("key");
+        return key == null || key.trim().isEmpty() ? null : key.trim();
     }
 
     private void configureSystemBars() {
@@ -144,6 +158,22 @@ public final class MainActivity extends Activity {
 
         downloadBridge = new NativeDownloadBridge(this);
         webView.addJavascriptInterface(downloadBridge, "ChatReelAndroid");
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        String unlockKey = unlockKeyFromIntent(intent);
+        if (unlockKey == null || webView == null) return;
+        String script = "(function(key){if(typeof window.ChatReelAutoUnlock==='function'){"
+                + "window.ChatReelAutoUnlock(key);return true;}return false;})(" + JSONObject.quote(unlockKey) + ")";
+        webView.evaluateJavascript(script, handled -> {
+            if (!"true".equals(handled)) {
+                // The React bridge may not be ready during a cold or restored page load.
+                webView.loadUrl(APP_URL + "?key=" + Uri.encode(unlockKey));
+            }
+        });
     }
 
     @Override

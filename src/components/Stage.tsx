@@ -12,6 +12,7 @@ interface StageProps {
   assets: AssetBundle;
   assetsLoading?: boolean;
   suspended?: boolean;
+  isPro: boolean;
 }
 
 function previewDimensions(aspect: Story['settings']['aspect']) {
@@ -20,7 +21,7 @@ function previewDimensions(aspect: Story['settings']['aspect']) {
   return { width: 540, height: 960 };
 }
 
-export function Stage({ story, timeline, assets, assetsLoading = false, suspended = false }: StageProps) {
+export function Stage({ story, timeline, assets, assetsLoading = false, suspended = false, isPro }: StageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef(new LiveAudioEngine());
@@ -50,12 +51,12 @@ export function Stage({ story, timeline, assets, assetsLoading = false, suspende
     canvas.height = dimensions.height;
     let cancelled = false;
     const draw = () => {
-      if (!cancelled) renderFrame(context, { ...dimensions, time, story, timeline, assets });
+      if (!cancelled) renderFrame(context, { ...dimensions, time, story, timeline, assets, isPro });
     };
     if (assets.backgroundVideo) void seekBackgroundVideo(assets, time).then(draw);
     else draw();
     return () => { cancelled = true; };
-  }, [time, story, timeline, assets, dimensions, playing, suspended]);
+  }, [time, story, timeline, assets, dimensions, playing, suspended, isPro]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -76,7 +77,7 @@ export function Stage({ story, timeline, assets, assetsLoading = false, suspende
     const draw = (now: number) => {
       const next = Math.min(timeline.duration, (now - anchor) / 1000);
       timeRef.current = next;
-      renderFrame(context, { ...dimensions, time: next, story, timeline, assets });
+      renderFrame(context, { ...dimensions, time: next, story, timeline, assets, isPro });
       setTime(next);
       if (next >= timeline.duration) setPlaying(false);
       else animationFrame = requestAnimationFrame(draw);
@@ -87,7 +88,7 @@ export function Stage({ story, timeline, assets, assetsLoading = false, suspende
       audioRef.current.stop();
       syncBackgroundPlayback(assets, timeRef.current, false);
     };
-  }, [playing, muted, story, timeline, assets, dimensions, suspended]);
+  }, [playing, muted, story, timeline, assets, dimensions, suspended, isPro]);
 
   useEffect(() => () => audioRef.current.stop(), []);
 

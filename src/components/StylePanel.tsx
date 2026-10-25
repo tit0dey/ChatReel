@@ -1,6 +1,7 @@
 import { useRef } from 'react';
-import { Check, Image, Monitor, Moon, RectangleHorizontal, RectangleVertical, Smartphone, Square, Sun, Upload, Video } from 'lucide-react';
+import { Check, Image, LockKeyhole, Monitor, Moon, RectangleHorizontal, RectangleVertical, Smartphone, Square, Sun, Upload, Video } from 'lucide-react';
 import { prepareImage } from '../lib/files';
+import { isProTheme } from '../lib/plans';
 import type { AspectRatio, BackgroundKind, ChatMode, ChatTheme, SpeedPreset, Story, ViewportMode } from '../types';
 import { SegmentedControl, SectionHeader, Toggle } from './Controls';
 import { useToast } from './Toasts';
@@ -8,6 +9,8 @@ import { useToast } from './Toasts';
 interface StylePanelProps {
   story: Story;
   onChange: (story: Story) => void;
+  isPro: boolean;
+  onRequestPro: (reason: string) => void;
 }
 
 const themes: Array<{ id: ChatTheme; name: string; detail: string }> = [
@@ -27,7 +30,7 @@ const backgrounds: Array<{ id: BackgroundKind; name: string; className: string }
   { id: 'starlight', name: 'Cozy Starlight Drift', className: 'starlight' },
 ];
 
-export function StylePanel({ story, onChange }: StylePanelProps) {
+export function StylePanel({ story, onChange, isPro, onRequestPro }: StylePanelProps) {
   const { toast } = useToast();
   const backgroundInput = useRef<HTMLInputElement>(null);
   const update = (patch: Partial<Story['settings']>) => onChange({ ...story, settings: { ...story.settings, ...patch } });
@@ -45,6 +48,7 @@ export function StylePanel({ story, onChange }: StylePanelProps) {
                 <i className="mini-bubble right" />
               </span>
               <span className="theme-card-copy"><strong>{theme.name}</strong><span>{theme.detail}</span></span>
+              {!isPro && isProTheme(theme.id) && <span className="theme-pro-badge"><LockKeyhole size={10} />Pro</span>}
               <span className="selection-check">{settings.theme === theme.id && <Check size={13} />}</span>
             </button>
           ))}
@@ -79,7 +83,10 @@ export function StylePanel({ story, onChange }: StylePanelProps) {
               {settings.background === background.id && <span className="background-check"><Check size={12} /></span>}
             </button>
           ))}
-          <button className={`background-card ${settings.background === 'custom' ? 'selected' : ''}`} onClick={() => backgroundInput.current?.click()}>
+          <button className={`background-card ${settings.background === 'custom' ? 'selected' : ''}`} onClick={() => {
+            if (!isPro) onRequestPro('custom photo and video backgrounds');
+            else backgroundInput.current?.click();
+          }}>
             <span className={`background-art custom ${settings.customBackgroundSrc && settings.customBackgroundType === 'image' ? 'has-image' : ''}`}>
               {settings.customBackgroundSrc && settings.customBackgroundType === 'image' ? <img src={settings.customBackgroundSrc} alt="" /> : settings.customBackgroundType === 'video' && settings.customBackgroundSrc ? <Video size={23} /> : <Upload size={22} />}
             </span>
@@ -90,6 +97,11 @@ export function StylePanel({ story, onChange }: StylePanelProps) {
         <input ref={backgroundInput} className="visually-hidden" type="file" accept="image/*,video/mp4,video/webm" onChange={async (event) => {
           const file = event.target.files?.[0];
           if (!file) return;
+          if (!isPro) {
+            event.target.value = '';
+            onRequestPro('custom photo and video backgrounds');
+            return;
+          }
           try {
             if (file.type.startsWith('video/')) {
               if (file.size > 250 * 1024 * 1024) throw new Error('Choose a background video smaller than 250 MB.');
@@ -157,9 +169,12 @@ export function StylePanel({ story, onChange }: StylePanelProps) {
         <div className="toggle-group">
           <Toggle checked={settings.sound} onChange={(sound) => update({ sound })} label="Chat sound effects" description="Keyboard taps, send whooshes, receive pops, and stings." />
           <Toggle checked={settings.voiceover} onChange={(voiceover) => update({ voiceover })} label="Dual-character voice preview" description="Uses distinct device voices. Export remains offline-safe if speech is unavailable." />
-          <Toggle checked={settings.watermark} onChange={(watermark) => update({ watermark })} label="Channel watermark" description="A clean badge placed above the floating chat card." />
+          <Toggle checked={isPro && settings.watermark} onChange={(watermark) => {
+            if (!isPro) onRequestPro('the custom @Channel badge and watermark-free export');
+            else update({ watermark });
+          }} label="Channel watermark" description="A custom @Channel badge with Lifetime Pro, placed above the floating chat card." />
         </div>
-        {settings.watermark && (
+        {isPro && settings.watermark && (
           <label className="field-block watermark-field">
             <span className="field-label">Watermark text</span>
             <span className="input-with-icon"><Image size={16} /><input className="text-input" value={settings.watermarkText} maxLength={40} onChange={(event) => update({ watermarkText: event.target.value })} placeholder="@yourchannel" /></span>

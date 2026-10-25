@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Clapperboard, Download, HardDrive, MessageSquareText, Moon, SlidersHorizontal, Sun } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BadgeCheck, Clapperboard, Crown, Download, HardDrive, MessageSquareText, Moon, SlidersHorizontal, Sun } from 'lucide-react';
 import { ExportPanel } from './components/ExportPanel';
+import { PaymentConfirmationModal } from './components/PaymentConfirmationModal';
+import { PlanModal } from './components/PlanModal';
 import { Stage } from './components/Stage';
 import { StoryPanel } from './components/StoryPanel';
 import { StylePanel } from './components/StylePanel';
 import { useToast } from './components/Toasts';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { usePersistentStory } from './hooks/usePersistentStory';
+import { useProLicense } from './hooks/useProLicense';
 import { loadAssets } from './lib/assets';
 import { buildTimeline } from './lib/story';
 import type { AssetBundle, Story } from './types';
@@ -27,10 +30,23 @@ function mediaSignature(story: Story): string {
   return `${hash}-${value.length}`;
 }
 
-export default function App() {
+interface AppProps {
+  automaticUnlockKeys?: readonly string[];
+}
+
+const NO_AUTOMATIC_UNLOCK_KEYS: readonly string[] = [];
+
+export default function App({ automaticUnlockKeys = NO_AUTOMATIC_UNLOCK_KEYS }: AppProps) {
   const { toast } = useToast();
+  const { isPro, status: licenseStatus, activate } = useProLicense();
   const [story, setStory] = usePersistentStory();
   const [activeTab, setActiveTab] = useState<StudioTab>('story');
+  const [planOpen, setPlanOpen] = useState(false);
+  const [planReason, setPlanReason] = useState<string | null>(null);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+  const [autoUnlockPending, setAutoUnlockPending] = useState(automaticUnlockKeys.length > 0);
+  const [paymentConfirmationKey, setPaymentConfirmationKey] = useState<string | null>(null);
+  const startupUnlockAttempted = useRef(false);
   const [appearance, setAppearance] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('chatreel-appearance');
     return saved === 'dark' || saved === 'light' ? saved : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -42,11 +58,58 @@ export default function App() {
   const timeline = useMemo(() => buildTimeline(story), [story]);
   const signature = mediaSignature(story);
 
+  const activateAutomatically = useCallback(async (licenseKey: string): Promise<boolean> => {
+    const normalized = licenseKey.trim();
+    setAutoUnlockPending(true);
+    const valid = await activate(normalized);
+    setAutoUnlockPending(false);
+    if (!valid) {
+      toast('Automatic unlock failed', { detail: 'The URL license key is invalid. You can use the optional manual activation field instead.', tone: 'error' });
+      return false;
+    }
+    setPaymentConfirmationKey(normalized);
+    setPlanOpen(false);
+    setPlanReason(null);
+    setOnboardingDismissed(true);
+    return true;
+  }, [activate, toast]);
+
+  useEffect(() => {
+    window.ChatReelAutoUnlock = activateAutomatically;
+    return () => {
+      if (window.ChatReelAutoUnlock === activateAutomatically) delete window.ChatReelAutoUnlock;
+    };
+  }, [activateAutomatically]);
+
+  useEffect(() => {
+    if (startupUnlockAttempted.current || automaticUnlockKeys.length === 0) return;
+    startupUnlockAttempted.current = true;
+    void (async () => {
+      for (const key of automaticUnlockKeys) {
+        if (await activateAutomatically(key)) break;
+      }
+    })();
+  }, [activateAutomatically, automaticUnlockKeys]);
+
   useEffect(() => {
     document.documentElement.dataset.theme = appearance;
     localStorage.setItem('chatreel-appearance', appearance);
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', appearance === 'dark' ? '#0B0E14' : '#F8FAFC');
   }, [appearance]);
+
+  useEffect(() => {
+    if (licenseStatus === 'free' && !onboardingDismissed && !autoUnlockPending && !paymentConfirmationKey) {
+      setPlanReason(null);
+      setPlanOpen(true);
+    }
+  }, [licenseStatus, onboardingDismissed, autoUnlockPending, paymentConfirmationKey]);
+
+  useEffect(() => {
+    if (isPro) {
+      setPlanOpen(false);
+      setPlanReason(null);
+    }
+  }, [isPro]);
 
   useEffect(() => {
     let active = true;
@@ -64,6 +127,15 @@ export default function App() {
   }, [signature]);
 
   const onChange = (next: Story) => setStory({ ...next, updatedAt: Date.now() });
+  const requestPro = (reason: string | null = null) => {
+    setPlanReason(reason);
+    setPlanOpen(true);
+  };
+  const closePlan = () => {
+    setPlanOpen(false);
+    setPlanReason(null);
+    setOnboardingDismissed(true);
+  };
   const selectTab = (tab: StudioTab) => {
     if (exporting) {
       toast('Export in progress', { detail: 'Cancel or finish the current render before leaving this view.', tone: 'info' });
@@ -72,10 +144,10 @@ export default function App() {
     setActiveTab(tab);
   };
   const panel = activeTab === 'story'
-    ? <StoryPanel story={story} onChange={onChange} />
+    ? <StoryPanel story={story} onChange={onChange} isPro={isPro} onRequestPro={requestPro} />
     : activeTab === 'style'
-      ? <StylePanel story={story} onChange={onChange} />
-      : <ExportPanel story={story} timeline={timeline} assets={assets} onChange={onChange} onExportingChange={setExporting} />;
+      ? <StylePanel story={story} onChange={onChange} isPro={isPro} onRequestPro={requestPro} />
+      : <ExportPanel story={story} timeline={timeline} assets={assets} onChange={onChange} onExportingChange={setExporting} isPro={isPro} onRequestPro={requestPro} />;
   const apkHref = window.location.hostname.endsWith('github.io')
     ? 'https://github.com/tit0dey/ChatReel/raw/main/apk/ChatReel-Studio.apk'
     : './apk';
@@ -89,6 +161,11 @@ export default function App() {
         </button>
         <div className="topbar-actions">
           <span className="local-status"><HardDrive size={15} />Saved locally</span>
+          {isPro ? (
+            <span className="pro-active-badge"><BadgeCheck size={16} />Pro Lifetime Active</span>
+          ) : (
+            <button className="button unlock-pro-button" onClick={() => requestPro()}><Crown size={16} /><span>Unlock Pro — $9</span></button>
+          )}
           {!window.ChatReelAndroid && <a className="button android-link" href={apkHref} download><Download size={16} /><span>Android app</span></a>}
           <button className="theme-toggle" onClick={() => setAppearance((value) => value === 'light' ? 'dark' : 'light')} aria-label={`Switch to ${appearance === 'light' ? 'dark' : 'light'} mode`} title={`Switch to ${appearance === 'light' ? 'dark' : 'light'} mode`}>
             <span className={appearance === 'light' ? 'active' : ''}><Sun size={16} /></span>
@@ -106,14 +183,14 @@ export default function App() {
             <div className="panel-scroll">{panel}</div>
           </aside>
           <div className="stage-workspace">
-            <Stage story={story} timeline={timeline} assets={assets} assetsLoading={assetsLoading} suspended={exporting} />
+            <Stage story={story} timeline={timeline} assets={assets} assetsLoading={assetsLoading} suspended={exporting} isPro={isPro} />
           </div>
         </main>
       ) : (
         <main className={`mobile-studio mobile-${activeTab}`}>
           {activeTab === 'export' ? (
             <div className="mobile-export-layout">
-              <Stage story={story} timeline={timeline} assets={assets} assetsLoading={assetsLoading} suspended={exporting} />
+              <Stage story={story} timeline={timeline} assets={assets} assetsLoading={assetsLoading} suspended={exporting} isPro={isPro} />
               {panel}
             </div>
           ) : panel}
@@ -128,6 +205,15 @@ export default function App() {
           })}
         </nav>
       )}
+
+      {paymentConfirmationKey && (
+        <PaymentConfirmationModal
+          verifiedKey={paymentConfirmationKey}
+          onActivate={activate}
+          onClose={() => setPaymentConfirmationKey(null)}
+        />
+      )}
+      {planOpen && !isPro && !paymentConfirmationKey && <PlanModal onClose={closePlan} onActivate={activate} reason={planReason} />}
     </div>
   );
 }

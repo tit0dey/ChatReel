@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Cpu, Download, FileVideo2, Film, LoaderCircle, PackageOpen, Square, Trash2, X } from 'lucide-react';
 import { exportEngineLabel, exportStoryVideo, saveVideoBlob } from '../lib/exporter';
 import { loadAssets } from '../lib/assets';
+import { getStoryProRestriction } from '../lib/plans';
 import { buildTimeline, formatTime, splitStory, uid } from '../lib/story';
 import { addVaultEntry, deleteVaultEntry, getVaultEntry, listVaultEntries, type VaultMetadata } from '../lib/vault';
 import type { AssetBundle, ExportProgress, FrameRate, Resolution, Story, StoryTimeline } from '../types';
@@ -14,6 +15,8 @@ interface ExportPanelProps {
   assets: AssetBundle;
   onChange: (story: Story) => void;
   onExportingChange: (exporting: boolean) => void;
+  isPro: boolean;
+  onRequestPro: (reason: string) => void;
 }
 
 const initialProgress: ExportProgress = { phase: 'audio', progress: 0, detail: 'Ready to render on this device' };
@@ -23,7 +26,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function ExportPanel({ story, timeline, assets, onChange, onExportingChange }: ExportPanelProps) {
+export function ExportPanel({ story, timeline, assets, onChange, onExportingChange, isPro, onRequestPro }: ExportPanelProps) {
   const { toast } = useToast();
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState<ExportProgress>(initialProgress);
@@ -42,6 +45,13 @@ export function ExportPanel({ story, timeline, assets, onChange, onExportingChan
 
   const startExport = async () => {
     if (exporting || !story.messages.length) return;
+    if (!isPro) {
+      const restriction = getStoryProRestriction(story);
+      if (restriction) {
+        onRequestPro(restriction);
+        return;
+      }
+    }
     const controller = new AbortController();
     abortRef.current = controller;
     setExporting(true);
@@ -63,6 +73,7 @@ export function ExportPanel({ story, timeline, assets, onChange, onExportingChan
           story: part,
           timeline: partTimeline,
           assets: partAssets,
+          isPro,
           partLabel: parts.length > 1 ? `Part ${index + 1}` : undefined,
           signal: controller.signal,
           onProgress: setProgress,
@@ -116,13 +127,16 @@ export function ExportPanel({ story, timeline, assets, onChange, onExportingChan
       </section>
 
       <section className="panel-section">
-        <SectionHeader title="Output quality" description="Every resolution and frame rate is available." />
+        <SectionHeader title="Output quality" description="Free includes 720p30. Lifetime Pro includes 1080p60." />
         <div className="field-block">
           <span className="field-label">Resolution</span>
           <SegmentedControl<Resolution>
             label="Export resolution"
             value={story.settings.resolution}
-            onChange={(resolution) => update({ resolution, fps: resolution === '720' ? 30 : story.settings.fps })}
+            onChange={(resolution) => {
+              if (!isPro && resolution === '1080') onRequestPro('1080p Full HD and 60fps export');
+              else update({ resolution, fps: resolution === '720' ? 30 : story.settings.fps });
+            }}
             options={[{ value: '720', label: '720p HD' }, { value: '1080', label: '1080p Full HD' }]}
           />
         </div>
@@ -131,7 +145,10 @@ export function ExportPanel({ story, timeline, assets, onChange, onExportingChan
           <SegmentedControl<FrameRate>
             label="Export frame rate"
             value={story.settings.fps}
-            onChange={(fps) => update({ fps })}
+            onChange={(fps) => {
+              if (!isPro && fps === 60) onRequestPro('1080p Full HD and 60fps export');
+              else update({ fps });
+            }}
             options={story.settings.resolution === '720' ? [{ value: 30, label: '30 fps · Fast mobile' }] : [{ value: 30, label: '30 fps' }, { value: 60, label: '60 fps · Smooth' }]}
           />
         </div>
@@ -147,7 +164,10 @@ export function ExportPanel({ story, timeline, assets, onChange, onExportingChan
         <SegmentedControl
           label="Export structure"
           value={story.settings.exportMode}
-          onChange={(exportMode: Story['settings']['exportMode']) => update({ exportMode })}
+          onChange={(exportMode: Story['settings']['exportMode']) => {
+            if (!isPro && exportMode === 'series') onRequestPro('the Multi-Part Series Splitter');
+            else update({ exportMode });
+          }}
           options={[{ value: 'single' as const, label: 'Single complete video' }, { value: 'series' as const, label: 'Multi-part series' }]}
         />
         {story.settings.exportMode === 'series' && (

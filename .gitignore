@@ -13,3 +13,10 @@ android/*.p12
 android/app/src/main/assets/www/
 playwright-report/
 test-results/
+
+# License identities and buyer key lists never belong in the repository.
+*.key
+*.pem
+*.pkcs8
+**/*license-private*
+**/*license-keys*
